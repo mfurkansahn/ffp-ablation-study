@@ -6,8 +6,20 @@ from training.train_ing_func import *
 import time
 import datetime
 
+# =====================================================
+# Curriculum ramp function
+# =====================================================
+def ramp(step, start, end, max_val):
+    if step < start:
+        return 0.0
+    elif step > end:
+        return max_val
+    else:
+        return max_val * (step - start) / (end - start)
 
 def training(cfg, dataset, dataloader, models, losses, opts, scores):
+    temp = time.time()
+
     # define start_iter
     start_iter = scores['step'] if scores['step'] > 0 else 0
 
@@ -47,7 +59,7 @@ def training(cfg, dataset, dataloader, models, losses, opts, scores):
             target = clips[:, 12:15, :, :].cuda()  # (n, 3, 256, 256) 
 
             # forward
-            G_l, D_l, F_frame = forward(input=input.cuda(), target=target, input_last=frame_4, input_prev=frame_3, models=models, losses=losses) # (n, 3, 256, 256) 
+            G_l, D_l, F_frame, lambda_motion, lambda_temporal, lambda_bezier = forward(input=input.cuda(), target=target, input_last=frame_4, input_prev=frame_3, models=models, losses=losses, step=scores['step']) # (n, 3, 256, 256) 
             scores['g_loss_list'].append(G_l.item())
             scores['d_loss_list'].append(D_l.item())
 
@@ -85,8 +97,9 @@ def training(cfg, dataset, dataloader, models, losses, opts, scores):
                     psnr = psnr_error(F_frame, target)
 
                     # print loss, psnr, auc
-                    print(f"[{scores['step']}] G_l: {G_l:.3f} | D_l: {D_l:.3f} | psnr: {psnr:.3f} | "\
-                    f"best_auc: {scores['best_auc']:.3f} | iter_t: {iter_t:.3f}s | remain_t: {eta}")
+                    print(f"[{scores['step']}] G_l: {G_l:.3f} | D_l: {D_l:.3f} | psnr: {psnr:.3f} | "
+                        f"lam_m: {lambda_motion:.3g} | lam_t: {lambda_temporal:.3g} | lam_b: {lambda_bezier:.3g} | "
+                        f"best_auc: {scores['best_auc']:.3f} | iter_t: {iter_t:.3f}s | remain_t: {eta}")
 
                     # view loss by graph
                     view_loss(cfg, scores)
@@ -121,7 +134,7 @@ def training(cfg, dataset, dataloader, models, losses, opts, scores):
         epoch += 1
         
 
-def forward(input, target, input_last, input_prev, models, losses):
+def forward(input, target, input_last, input_prev, models, losses, step):
     '''
     Return generator_loss, discriminator_loss, generated_frame
     '''
@@ -138,10 +151,14 @@ def forward(input, target, input_last, input_prev, models, losses):
     temporal_loss = losses['temporal_loss']
     bezier_loss = losses['bezier_loss']
 
-    coefs = [1, 1, 0.05, 2] # inte_l, grad_l, adv_l, flow_l
-    lambda_motion = 0.1 # motion_l -- lambda_motion = 0.05
-    lambda_temporal = 0.05 # temporal_l -- lambda_temporal = 0.05
-    lambda_bezier = 0.005 # bezier_l -- lambda_bezier = 0.005
+    flow_coef = 2 if step < 22000 else 1.0
+    coefs = [1, 1, 0.05, flow_coef] # inte_l, grad_l, adv_l, flow_l
+    # -----------------------------
+    # Curriculum (ped2 / 29k)
+    # -----------------------------
+    lambda_motion = ramp(step, 8000, 12000, 0.10)
+    lambda_temporal = ramp(step, 16000, 20000, 0.01)
+    lambda_bezier = ramp(step, 22000, 26000, 0.002)
 
     # future frame prediction and get loss
     #Generator outputs both future frame and motion (optical flow) prediction. The motion prediction is supervised by the optical flow calculated from the flownet, which is trained with the input and target frames.
@@ -198,4 +215,12 @@ def forward(input, target, input_last, input_prev, models, losses):
     loss_dis = discriminate_loss(discriminator(target),
                                  discriminator(pred_frame.detach()))
 
-    return loss_gen, loss_dis, pred_frame
+    # lambdas = {
+    #     'motion': lambda_motion,
+    #     'temporal': lambda_temporal,
+    #     'bezier': lambda_bezier
+    # }
+
+    # return loss_gen, loss_dis, pred_frame, lambdas lambda_motion, lambda_temp, lambda_bezier
+
+    return loss_gen, loss_dis, pred_frame, lambda_motion, lambda_temporal, lambda_bezier
