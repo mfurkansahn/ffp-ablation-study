@@ -47,7 +47,7 @@ def training(cfg, dataset, dataloader, models, losses, opts, scores):
             target = clips[:, 12:15, :, :].cuda()  # (n, 3, 256, 256) 
 
             # forward
-            G_l, D_l, F_frame = forward(input=input.cuda(), target=target, input_last=frame_4, models=models, losses=losses) # (n, 3, 256, 256) 
+            G_l, D_l, F_frame = forward(input=input.cuda(), target=target, input_last=frame_4, input_prev=frame_3, models=models, losses=losses) # (n, 3, 256, 256) 
             scores['g_loss_list'].append(G_l.item())
             scores['d_loss_list'].append(D_l.item())
 
@@ -121,7 +121,7 @@ def training(cfg, dataset, dataloader, models, losses, opts, scores):
         epoch += 1
         
 
-def forward(input, target, input_last, models, losses):
+def forward(input, target, input_last, input_prev, models, losses):
     '''
     Return generator_loss, discriminator_loss, generated_frame
     '''
@@ -135,9 +135,11 @@ def forward(input, target, input_last, models, losses):
     adversarial_loss = losses['adversarial_loss']
     flow_loss = losses['flow_loss']
     motion_loss = losses['motion_loss']
+    temporal_loss = losses['temporal_loss']
 
     coefs = [1, 1, 0.05, 2] # inte_l, grad_l, adv_l, flow_l
     lambda_motion = 0.1 # motion_l -- lambda_motion = 0.05
+    lambda_temporal = 0.05 # temporal_l -- lambda_temporal = 0.05
 
     # future frame prediction and get loss
     #Generator outputs both future frame and motion (optical flow) prediction. The motion prediction is supervised by the optical flow calculated from the flownet, which is trained with the input and target frames.
@@ -167,13 +169,21 @@ def forward(input, target, input_last, models, losses):
         align_corners=False
     )
     motion_l = motion_loss(pred_motion, flow_gt_ds)
+
+    temporal_l = temporal_loss(
+        pred_frame,
+        input_last,   # frame_t
+        input_prev    # frame_{t-1}
+    )
+
     
     # Total generator loss
     loss_gen = coefs[0] * inte_l + \
             coefs[1] * grad_l + \
             coefs[2] * adv_l + \
             coefs[3] * flow_l + \
-            lambda_motion * motion_l
+            lambda_motion * motion_l + \
+            lambda_temporal * temporal_l
 
 
     # discriminator

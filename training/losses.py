@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional
+import torch.nn.functional as F
 import numpy as np
 
 class Flow_Loss(nn.Module):
@@ -70,4 +70,19 @@ class MotionLoss(nn.Module):
 
     def forward(self, pred_motion, gt_motion):
         return self.l1(pred_motion, gt_motion)
+
+class TemporalConsistencyLoss(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, pred, frame_t, frame_t_minus_1):
+        # pred        : predicted frame_{t+1}
+        # frame_t     : frame_t
+        # frame_t-1   : frame_{t-1}
+
+        # temporal difference
+        diff_pred = pred - frame_t
+        diff_gt   = frame_t - frame_t_minus_1
+
+        return F.l1_loss(diff_pred, diff_gt)
 

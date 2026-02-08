@@ -66,8 +66,9 @@ def def_losses():
     intensity_loss = Intensity_Loss().cuda()
     flow_loss = Flow_Loss().cuda()
     motion_loss = MotionLoss().cuda()
+    temporal_loss = TemporalConsistencyLoss().cuda()
 
-    return adversarial_loss, discriminate_loss, gradient_loss, intensity_loss, flow_loss, motion_loss
+    return adversarial_loss, discriminate_loss, gradient_loss, intensity_loss, flow_loss, motion_loss, temporal_loss
 
 
 def def_optim(cfg, gen, disc):
@@ -126,7 +127,7 @@ def make_model_dict(generator, discriminator, flownet):
     return models
     
 
-def make_loss_dict(discriminate_loss, intensity_loss, gradient_loss, adversarial_loss, flow_loss, motion_loss):
+def make_loss_dict(discriminate_loss, intensity_loss, gradient_loss, adversarial_loss, flow_loss, motion_loss, temporal_loss):
     losses = dict()
     losses['discriminate_loss'] = discriminate_loss
     losses['intensity_loss'] = intensity_loss
@@ -134,6 +135,7 @@ def make_loss_dict(discriminate_loss, intensity_loss, gradient_loss, adversarial
     losses['adversarial_loss'] = adversarial_loss
     losses['flow_loss'] = flow_loss
     losses['motion_loss'] = motion_loss
+    losses['temporal_loss'] = temporal_loss
 
     return losses
 
