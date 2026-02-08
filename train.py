@@ -42,7 +42,7 @@ def main():
     generator, discriminator, flownet = def_models()
 
     # define losses
-    adversarial_loss, discriminate_loss, gradient_loss, intensity_loss, flow_loss = def_losses()
+    adversarial_loss, discriminate_loss, gradient_loss, intensity_loss, flow_loss, motion_loss = def_losses()
 
     # define optimizer 
     optimizer_G, optimizer_D = def_optim(train_cfg, generator, discriminator)
@@ -55,7 +55,7 @@ def main():
 
     # make dict
     models = make_model_dict(generator, discriminator, flownet)
-    losses = make_loss_dict(discriminate_loss, intensity_loss, gradient_loss, adversarial_loss, flow_loss)
+    losses = make_loss_dict(discriminate_loss, intensity_loss, gradient_loss, adversarial_loss, flow_loss, motion_loss)
     opts = make_opt_dict(optimizer_G, optimizer_D)
 
 

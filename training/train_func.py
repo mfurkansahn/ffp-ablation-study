@@ -134,30 +134,50 @@ def forward(input, target, input_last, models, losses):
     gradient_loss = losses['gradient_loss']
     adversarial_loss = losses['adversarial_loss']
     flow_loss = losses['flow_loss']
+    motion_loss = losses['motion_loss']
 
     coefs = [1, 1, 0.05, 2] # inte_l, grad_l, adv_l, flow_l
+    lambda_motion = 0.1 # motion_l -- lambda_motion = 0.05
 
     # future frame prediction and get loss
-    pred  = generator(input)
-    inte_l = intensity_loss(pred, target)
-    grad_l = gradient_loss(pred, target)
-    adv_l = adversarial_loss(discriminator(pred))
+    #Generator outputs both future frame and motion (optical flow) prediction. The motion prediction is supervised by the optical flow calculated from the flownet, which is trained with the input and target frames.
+    pred_frame, pred_motion = generator(input)
 
+    #Frame-domain losses are calculated between the predicted future frame and the ground truth future frame. The intensity loss is calculated as the mean absolute error between the predicted and ground truth frames, while the gradient loss is calculated as the mean absolute error of the gradients (calculated using convolution with specific filters) of the predicted and ground truth frames. The adversarial loss is calculated based on the output of the discriminator when fed with the predicted frame, encouraging the generator to produce frames that are indistinguishable from real frames.
+    inte_l = intensity_loss(pred_frame, target)
+    grad_l = gradient_loss(pred_frame, target)
+    adv_l = adversarial_loss(discriminator(pred_frame))
+
+    #Flow consistency loss (baseline) is calculated as the mean absolute error between the optical flow predicted by the flownet for the predicted frame and the optical flow predicted by the flownet for the ground truth frame. This encourages the generator to produce future frames that not only look realistic but also have motion that is consistent with the motion in the ground truth frames, as captured by the optical flow.
     # flowmap prediction and get loss
     gt_flow_input = torch.cat([input_last.unsqueeze(2), target.unsqueeze(2)], 2)
-    pred_flow_input = torch.cat([input_last.unsqueeze(2), pred.unsqueeze(2)], 2)
+    pred_flow_input = torch.cat([input_last.unsqueeze(2), pred_frame.unsqueeze(2)], 2)
 
     flow_gt = (flownet(gt_flow_input * 255.) / 255.).detach()  # Input for flownet2sd is in (0, 255).
     flow_pred = (flownet(pred_flow_input * 255.) / 255.).detach()
     flow_l = flow_loss(flow_pred, flow_gt)
 
+    # Explicit motion supervision (proposed) is calculated as the mean absolute error between the motion prediction from the generator's motion head and the optical flow calculated by the flownet for the ground truth frame. This provides an additional supervisory signal to the generator, encouraging it to learn to predict motion (optical flow) that is consistent with the motion in the ground truth frames, which can help improve the quality of the predicted future frames.
+    #    flow_gt: [B,2,256,256] -> downsample to [B,2,32,32]
+    # -------------------------
+    flow_gt_ds = torch.nn.functional.interpolate(
+        flow_gt,
+        size=pred_motion.shape[-2:],
+        mode='bilinear',
+        align_corners=False
+    )
+    motion_l = motion_loss(pred_motion, flow_gt_ds)
+    
+    # Total generator loss
     loss_gen = coefs[0] * inte_l + \
-                coefs[1] * grad_l + \
-                coefs[2] * adv_l + \
-                coefs[3] * flow_l
+            coefs[1] * grad_l + \
+            coefs[2] * adv_l + \
+            coefs[3] * flow_l + \
+            lambda_motion * motion_l
+
 
     # discriminator
     loss_dis = discriminate_loss(discriminator(target),
-                                 discriminator(pred.detach()))
+                                 discriminator(pred_frame.detach()))
 
-    return loss_gen, loss_dis, pred
+    return loss_gen, loss_dis, pred_frame

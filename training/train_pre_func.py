@@ -8,6 +8,7 @@ from flownet.flownet2.models import FlowNet2SD
 from utils import weights_init_normal
 
 
+
 def str2bool(v):
     if isinstance(v, bool):
         return v
@@ -64,8 +65,9 @@ def def_losses():
     gradient_loss = Gradient_Loss(3).cuda()
     intensity_loss = Intensity_Loss().cuda()
     flow_loss = Flow_Loss().cuda()
+    motion_loss = MotionLoss().cuda()
 
-    return adversarial_loss, discriminate_loss, gradient_loss, intensity_loss, flow_loss
+    return adversarial_loss, discriminate_loss, gradient_loss, intensity_loss, flow_loss, motion_loss
 
 
 def def_optim(cfg, gen, disc):
@@ -124,13 +126,15 @@ def make_model_dict(generator, discriminator, flownet):
     return models
     
 
-def make_loss_dict(discriminate_loss, intensity_loss, gradient_loss, adversarial_loss, flow_loss):
+def make_loss_dict(discriminate_loss, intensity_loss, gradient_loss, adversarial_loss, flow_loss, motion_loss):
     losses = dict()
     losses['discriminate_loss'] = discriminate_loss
     losses['intensity_loss'] = intensity_loss
     losses['gradient_loss'] = gradient_loss
     losses['adversarial_loss'] = adversarial_loss
     losses['flow_loss'] = flow_loss
+    losses['motion_loss'] = motion_loss
+
     return losses
 
 

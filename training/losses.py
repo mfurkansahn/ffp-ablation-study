@@ -62,3 +62,12 @@ class Discriminate_Loss(nn.Module):
 
     def forward(self, real_outputs, fake_outputs):
         return torch.mean((real_outputs - 1) ** 2 / 2) + torch.mean(fake_outputs ** 2 / 2)
+
+class MotionLoss(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.l1 = nn.L1Loss()
+
+    def forward(self, pred_motion, gt_motion):
+        return self.l1(pred_motion, gt_motion)
+

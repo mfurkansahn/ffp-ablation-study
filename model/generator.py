@@ -64,18 +64,29 @@ class UNet(nn.Module):
         self.up2 = up(256, 128)
         self.up3 = up(128, 64)
         self.outc = nn.Conv2d(64, output_channel, kernel_size=3, padding=1)
+        # motion head (optical flow prediction) from encoder feature
+        self.motion_head = nn.Sequential(
+            nn.Conv2d(512, 256, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(256, 2, kernel_size=3, padding=1)  # (u, v)
+        )
 
     def forward(self, x):
         x1 = self.inc(x)
         x2 = self.down1(x1)
         x3 = self.down2(x2)
         x4 = self.down3(x3)
+
+        # explicit motion from encoder feature
+        pred_motion = self.motion_head(x4)
+
         x = self.up1(x4, x3)
         x = self.up2(x, x2)
         x = self.up3(x, x1)
-        x = self.outc(x)
 
-        return torch.tanh(x)
+        pred_frame = self.outc(x)
+
+        return torch.tanh(pred_frame), pred_motion
 
 
 if __name__=="__main__":
