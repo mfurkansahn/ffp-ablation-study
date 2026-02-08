@@ -136,10 +136,12 @@ def forward(input, target, input_last, input_prev, models, losses):
     flow_loss = losses['flow_loss']
     motion_loss = losses['motion_loss']
     temporal_loss = losses['temporal_loss']
+    bezier_loss = losses['bezier_loss']
 
     coefs = [1, 1, 0.05, 2] # inte_l, grad_l, adv_l, flow_l
     lambda_motion = 0.1 # motion_l -- lambda_motion = 0.05
     lambda_temporal = 0.05 # temporal_l -- lambda_temporal = 0.05
+    lambda_bezier = 0.005 # bezier_l -- lambda_bezier = 0.005
 
     # future frame prediction and get loss
     #Generator outputs both future frame and motion (optical flow) prediction. The motion prediction is supervised by the optical flow calculated from the flownet, which is trained with the input and target frames.
@@ -176,6 +178,11 @@ def forward(input, target, input_last, input_prev, models, losses):
         input_prev    # frame_{t-1}
     )
 
+    bezier_l = bezier_loss(
+        input_prev,   # frame_{t-1}
+        input_last,   # frame_t
+        pred_frame    # frame_{t+1}
+    )
     
     # Total generator loss
     loss_gen = coefs[0] * inte_l + \
@@ -183,7 +190,8 @@ def forward(input, target, input_last, input_prev, models, losses):
             coefs[2] * adv_l + \
             coefs[3] * flow_l + \
             lambda_motion * motion_l + \
-            lambda_temporal * temporal_l
+            lambda_temporal * temporal_l + \
+            lambda_bezier * bezier_l
 
 
     # discriminator

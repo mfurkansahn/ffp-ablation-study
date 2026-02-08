@@ -86,3 +86,16 @@ class TemporalConsistencyLoss(nn.Module):
 
         return F.l1_loss(diff_pred, diff_gt)
 
+class BezierTrajectoryLoss(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, frame_t_minus_1, frame_t, frame_t_plus_1):
+        """
+        En basit ve stabil Bezier yaklaşımı:
+        frame_t_plus_1 ≈ 2*frame_t - frame_t_minus_1
+        """
+        bezier_pred = 2 * frame_t - frame_t_minus_1
+        return F.l1_loss(frame_t_plus_1, bezier_pred)
+
+

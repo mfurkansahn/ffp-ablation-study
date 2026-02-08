@@ -85,19 +85,42 @@ class UNet(nn.Module):
         x = self.up3(x, x1)
 
         pred_frame = self.outc(x)
+        pred_frame = torch.tanh(pred_frame)
 
-        return torch.tanh(pred_frame), pred_motion
+        # TRAIN: frame + motion
+        if self.training:
+            return pred_frame, pred_motion
+
+        # EVAL: only frame (PSNR/AUC safe)
+        return pred_frame
 
 
-if __name__=="__main__":
+
+if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(device)
-    
-    x = torch.ones([4, 12, 256, 256]).cuda()
-    model = UNet(12, 3).cuda()
 
-    print(summary(model,x))
-    print('input:',x.shape)
-    print('output:',model(x).shape)
+    x = torch.ones([4, 12, 256, 256]).to(device)
+    model = UNet(12, 3).to(device)
+
+    # ---- EVAL TEST ----
+    model.eval()
+    with torch.no_grad():
+        y = model(x)
+
+    print('input:', x.shape)
+    print('output:', y.shape)
+
     print('===================================')
-    print(model.parameters)
+
+    # ---- TRAIN TEST ----
+    model.train()
+    pred_frame, pred_motion = model(x)
+    print('train frame:', pred_frame.shape)
+    print('train motion:', pred_motion.shape)
+
+    print('===================================')
+
+    # ---- SUMMARY (eval path) ----
+    model.eval()
+    summary(model, x)
